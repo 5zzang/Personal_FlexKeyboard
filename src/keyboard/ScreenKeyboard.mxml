@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Box xmlns:mx="http://www.adobe.com/2006/mxml"
+		width="1024" height="300" borderColor="#8E8E8E" borderStyle="solid" cornerRadius="10"
+		initialize="init()">
+	<mx:Metadata>
+		[Event(name="screenKeyboardEnter", type="mx.events.FlexEvent")]
+		[Event(name="screenKeyboardClose", type="mx.events.FlexEvent")]
+	</mx:Metadata>
+	<!--
+	- Author : 5zzang
+	- Remark : 화상키보드
+	-->
+    <mx:Script>
+        <![CDATA[
+			import keyboard.events.HangleTextEvent;
+			import keyboard.text.HangleUnicodeComposer;
+			import keyboard.text.HangleUnicodeComposer2;
+			
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.FlexEvent;
+            
+            use namespace mx_internal;
+            
+			public var hangleComposer:HangleUnicodeComposer = new HangleUnicodeComposer();
+			private var isKorean:Boolean = true;
+			private var _inputTarget:PadTextInput;
+			
+			//키보드 한글 글자 순서에 맞는 배열
+			private const koreanLower:Array = [
+				"ㅂ","ㅈ","ㄷ","ㄱ","ㅅ","ㅛ","ㅕ","ㅑ","ㅐ","ㅔ",
+				"ㅁ","ㄴ","ㅇ","ㄹ","ㅎ","ㅗ","ㅓ","ㅏ","ㅣ",
+				"ㅋ","ㅌ","ㅊ","ㅍ","ㅠ","ㅜ","ㅡ"];
+			
+			//키보드 한글(shift)글자 순서에 맞는 배열
+			private const koreanUpper:Array = [
+				"ㅃ","ㅉ","ㄸ","ㄲ","ㅆ","ㅛ","ㅕ","ㅑ","ㅒ","ㅖ",
+				"ㅁ","ㄴ","ㅇ","ㄹ","ㅎ","ㅗ","ㅓ","ㅏ","ㅣ",
+				"ㅋ","ㅌ","ㅊ","ㅍ","ㅠ","ㅜ","ㅡ"];
+			
+			//키보드 영어 글자 순서에 맞는 배열
+			private const englishLower:Array = [
+				"q","w","e","r","t","y","u","i","o","p",
+				"a","s","d","f","g","h","j","k","l",
+				"z","x","c","v","b","n","m"];
+			
+			
+			private function init():void {
+				//글자 버튼에 마우스 이벤트 적용
+				for (var i:int=0; i < 40; ++i) {
+					if (i < 26) {	// 문자버튼
+						(this["btn_"+i] as Button).addEventListener(MouseEvent.MOUSE_DOWN, onButton);
+					} else {		// 특수문자, 숫자버튼
+						(this["btn_"+i] as Button).addEventListener(MouseEvent.MOUSE_DOWN, onSpecialCharButton);
+					}
+				}
+				
+				btnShift.addEventListener(MouseEvent.MOUSE_DOWN, onShiftButton);
+				btnEnter.addEventListener(MouseEvent.MOUSE_DOWN, onEnterButton);
+				btnBackSpace.addEventListener(MouseEvent.MOUSE_DOWN, onBackSpaceButton);
+				btnSpaceBar.addEventListener(MouseEvent.MOUSE_DOWN, onSpaceBarButton);
+				btnIME.addEventListener(MouseEvent.MOUSE_DOWN, onIMEButton);
+				btnClose.addEventListener(MouseEvent.MOUSE_DOWN, onCloseButton);
+				
+				//중요. 조합된 내용이 바뀔 경우 이벤트를 받는다.
+				hangleComposer.addEventListener(HangleTextEvent.UPDATE, onHangleComposite);
+				stateUpdate();
+			}
+			
+			//키보드 키의 라벨 변경
+			private function stateUpdate():void {
+				var i:int;
+				if(!btnShift.selected){
+					if(isKorean){
+						for( i=0; i < 26; ++i){
+							(this["btn_"+i] as Button).label = koreanLower[i];
+						}
+					} else {
+						for( i=0; i < 26; ++i){
+							(this["btn_"+i] as Button).label = String(englishLower[i]).toLowerCase();
+						}
+					}
+				} else {
+					if(isKorean){
+						for( i=0; i < 26; ++i){
+							(this["btn_"+i] as Button).label = koreanUpper[i];
+						}
+					} else {
+						for( i=0; i < 26; ++i){
+							(this["btn_"+i] as Button).label = String(englishLower[i]).toUpperCase();
+						}
+					}
+				}
+				
+				if(isKorean){
+					btnIME.label = "영어";
+				} else {
+					btnIME.label = "한글";
+				}
+			}
+			
+			
+			//중요. 이벤트를 받아 텍스트 필드에 입력해준다.
+			private function onHangleComposite(e:HangleTextEvent):void {
+				_inputTarget.text = hangleComposer.compositionString + hangleComposer.extra;
+			}
+			
+			//중요. 콤포져 객체에 addJamo 또는 addSpecialChar 를 이용해 글자를 입력해준다.
+			private function onButton(event:MouseEvent):void {
+				FlexGlobals.topLevelApplication.mainTimer.reset();
+				FlexGlobals.topLevelApplication.mainTimer.start();
+				
+				if (_inputTarget.text.length == _inputTarget.maxChars) return;
+				
+				var char:String = (event.target as Button).label;
+				
+				if (isKorean) {
+					hangleComposer.addJamo(char);
+				} else {
+					hangleComposer.addSpecialChar(char, _inputTarget.length);
+				}
+				
+				if ( btnShift.selected == true ) btnShift.selected = false;
+				stateUpdate();
+			}
+			
+			//중요. 특수문자를 입력해준다.
+			private function onSpecialCharButton(event:MouseEvent):void {
+				FlexGlobals.topLevelApplication.mainTimer.reset();
+				FlexGlobals.topLevelApplication.mainTimer.start();
+				
+				if (_inputTarget.text.length == _inputTarget.maxChars) return;
+				
+				var char:String = (event.target as Button).label;
+				hangleComposer.addSpecialChar(char, _inputTarget.length);
+				
+				if ( btnShift.selected == true ) btnShift.selected = false;
+				stateUpdate();
+			}
+			
+			// Shift 버튼
+			private function onShiftButton(event:MouseEvent):void {
+				FlexGlobals.topLevelApplication.mainTimer.reset();
+				FlexGlobals.topLevelApplication.mainTimer.start();
+				
+				btnShift.selected = (btnShift.selected)? false:true;
+				stateUpdate();
+			}
+			
+			// SpaceBar 버튼
+			private function onSpaceBarButton(event:MouseEvent):void {
+				FlexGlobals.topLevelApplication.mainTimer.reset();
+				FlexGlobals.topLevelApplication.mainTimer.start();
+				
+				if (_inputTarget.text.length == _inputTarget.maxChars) return;
+				
+				hangleComposer.space();
+				
+				if ( btnShift.selected == true ) btnShift.selected = false;
+				stateUpdate();
+			}
+			
+			// Enter 버튼
+			private function onEnterButton(event:MouseEvent):void {
+				FlexGlobals.topLevelApplication.mainTimer.reset();
+				FlexGlobals.topLevelApplication.mainTimer.start();
+				
+				hangleComposer.reset();
+				_inputTarget.drawFocus(false);
+				//dispatchEvent(new FlexEvent("screenKeyboardEnter", true, true));
+			}
+			
+			// BackSpace 버튼
+			private function onBackSpaceButton(event:MouseEvent):void {
+				FlexGlobals.topLevelApplication.mainTimer.reset();
+				FlexGlobals.topLevelApplication.mainTimer.start();
+				
+				hangleComposer.backSpace(_inputTarget.text.length);
+			}
+			
+			// IME 버튼
+			private function onIMEButton(event:MouseEvent):void {
+				FlexGlobals.topLevelApplication.mainTimer.reset();
+				FlexGlobals.topLevelApplication.mainTimer.start();
+				
+				isKorean = (isKorean)? false:true;
+				stateUpdate();
+			}
+			
+			// 닫기 버튼
+			private function onCloseButton(event:MouseEvent):void {
+				dispatchEvent(new FlexEvent("screenKeyboardClose", true, true));
+			}
+            
+			// InputTarget
+            public function set inputTarget(target:PadTextInput):void {
+                _inputTarget=target;
+            }
+        ]]>
+    </mx:Script>
+
+    <mx:HBox width="100%" height="100%" borderStyle="solid" cornerRadius="10" verticalGap="3" backgroundColor="0xffffff" paddingTop="10" paddingBottom="10" paddingLeft="10" paddingRight="10">
+        <mx:VBox id="hangulKeyPad" width="70%" height="100%" verticalGap="10">
+            <mx:HBox width="100%" height="100%" horizontalGap="10">
+                <mx:Button id="btn_0" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅂ" />
+                <mx:Button id="btn_1" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅈ" />
+                <mx:Button id="btn_2" fontSize="20" fontWeight="bold" width="60" height="60" label="ㄷ" />
+                <mx:Button id="btn_3" fontSize="20" fontWeight="bold" width="60" height="60" label="ㄱ" />
+                <mx:Button id="btn_4" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅅ" />
+                <mx:Button id="btn_5" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅛ" />
+                <mx:Button id="btn_6" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅕ" />
+                <mx:Button id="btn_7" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅑ" />
+                <mx:Button id="btn_8" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅐ" />
+                <mx:Button id="btn_9" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅔ" />
+                <mx:Button id="btnBackSpace" fontSize="20" fontWeight="bold" width="60" height="60" label="←" />
+            </mx:HBox>
+            <mx:HBox width="100%" height="100%" horizontalGap="10">
+                <mx:Spacer width="10"/>
+                <mx:Button id="btn_10" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅁ" />
+                <mx:Button id="btn_11" fontSize="20" fontWeight="bold" width="60" height="60" label="ㄴ" />
+                <mx:Button id="btn_12" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅇ" />
+                <mx:Button id="btn_13" fontSize="20" fontWeight="bold" width="60" height="60" label="ㄹ" />
+                <mx:Button id="btn_14" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅎ" />
+                <mx:Button id="btn_15" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅗ" />
+                <mx:Button id="btn_16" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅓ" />
+                <mx:Button id="btn_17" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅏ" />
+                <mx:Button id="btn_18" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅣ" />
+                <mx:Button id="btnEnter" fontSize="20" fontWeight="bold" width="100%" height="60" label="Enter" />
+            </mx:HBox>
+            <mx:HBox width="100%" height="100%" horizontalGap="10">
+                <mx:Button id="btnShift" fontSize="17" fontWeight="bold" width="130" height="60" label="Shift" />
+                <mx:Button id="btn_19" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅋ" />
+                <mx:Button id="btn_20" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅌ" />
+                <mx:Button id="btn_21" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅊ" />
+                <mx:Button id="btn_22" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅍ" />
+                <mx:Button id="btn_23" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅠ" />
+                <mx:Button id="btn_24" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅜ" />
+                <mx:Button id="btn_25" fontSize="20" fontWeight="bold" width="60" height="60" label="ㅡ" />
+                <mx:Button id="btn_26" fontSize="17" fontWeight="bold" width="60" height="60" label="-" />
+                <mx:Button id="btn_27" fontSize="17" fontWeight="bold" width="60" height="60" label="/" />
+            </mx:HBox>
+            <mx:HBox width="100%" height="100%" horizontalGap="10">
+                <mx:Button id="btnIME" fontSize="17" fontWeight="bold" width="130" height="60" label="한글/ENG" />
+                <mx:Button id="btnSpaceBar" fontSize="17" fontWeight="bold" width="100%" height="60" label="SpaceBar" />
+                <mx:Button id="btn_28" fontSize="17" fontWeight="bold" width="130" height="60" label="@" />
+                <mx:Button id="btnClose" fontSize="20" fontWeight="bold" width="60" height="60" label="▼" />
+            </mx:HBox>
+        </mx:VBox>
+
+        <mx:Spacer width="100%"/>
+
+        <!-- 넘버 패드 -->
+        <mx:VBox width="30%" height="100%" verticalGap="10">
+            <mx:HBox width="100%" height="100%" horizontalGap="10">
+                <mx:Button id="btn_30" fontSize="20" fontWeight="bold" width="60" height="60" label="7" />
+                <mx:Button id="btn_31" fontSize="20" fontWeight="bold" width="60" height="60" label="8" />
+                <mx:Button id="btn_32" fontSize="20" fontWeight="bold" width="60" height="60" label="9" />
+            </mx:HBox>
+            <mx:HBox width="100%" height="100%" horizontalGap="10">
+                <mx:Button id="btn_33" fontSize="20" fontWeight="bold" width="60" height="60" label="4" />
+                <mx:Button id="btn_34" fontSize="20" fontWeight="bold" width="60" height="60" label="5" />
+                <mx:Button id="btn_35" fontSize="20" fontWeight="bold" width="60" height="60" label="6" />
+            </mx:HBox>
+            <mx:HBox width="100%" height="100%" horizontalGap="10">
+                <mx:Button id="btn_36" fontSize="20" fontWeight="bold" width="60" height="60" label="1" />
+                <mx:Button id="btn_37" fontSize="20" fontWeight="bold" width="60" height="60" label="2" />
+                <mx:Button id="btn_38" fontSize="20" fontWeight="bold" width="60" height="60" label="3" />
+            </mx:HBox>
+            <mx:HBox width="100%" height="100%" horizontalGap="10">
+                <mx:Button id="btn_39" fontSize="20" fontWeight="bold" width="130" height="60" label="0" />
+                <mx:Button id="btn_29" fontSize="20" fontWeight="bold" width="60" height="60" label="." />
+            </mx:HBox>
+        </mx:VBox>
+    </mx:HBox>
+</mx:Box>
